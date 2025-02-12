@@ -1,0 +1,7 @@
+path: ./data/dataset  # Chemin racine absolu ou relatif
+train: ../train_valid/images
+val: ../val_valid/images
+test: ../test_valid/images
+
+nc: 3  # 0: Vide, 1: X, 2: O
+input_shape: [512, 512]  # Augmentez selon votre GPU
