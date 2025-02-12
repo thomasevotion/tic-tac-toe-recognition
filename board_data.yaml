@@ -1,0 +1,9 @@
+# board_data.yaml
+train: ../data/board/train/images
+val: ../data/board/val/images
+
+# Nombre de classes
+nc: 1
+
+# Noms des classes
+names: ['board']
