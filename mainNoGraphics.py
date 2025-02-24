@@ -6,29 +6,32 @@ import numpy as np
 from torchvision import transforms
 import torch.nn as nn
 from torchvision import models
+from efficientnet_pytorch import EfficientNet
 # from xarm.wrapper import XArmAPI
 # from robot.o_move import RobotMain  # Importation de la classe RobotMain depuis votre fichier original
 
 #############################################
 # Définition du modèle (même architecture qu'à l'entraînement)
 #############################################
-class TicTacToeResNet(nn.Module):
-    def __init__(self, base_model):
-        super(TicTacToeResNet, self).__init__()
-        self.base = base_model
-
+class TicTacToeEfficientNet(nn.Module):
+    def __init__(self, model_name='efficientnet-b0'):
+        super(TicTacToeEfficientNet, self).__init__()
+        # Charger le modèle EfficientNet pré-entraîné
+        self.base = EfficientNet.from_pretrained(model_name)
+        num_features = self.base._fc.in_features
+        # Remplacer la couche finale pour obtenir 27 sorties (9 cases x 3 classes)
+        self.base._fc = nn.Linear(num_features, 9 * 3)
+        
     def forward(self, x):
-        x = self.base(x)  # sortie attendue : (batch, 27)
+        x = self.base(x)
         x = x.view(-1, 9, 3)
         return x
 
 def create_model():
-    # Chargement du ResNet18 pré-entraîné
-    base_model = models.resnet18(pretrained=True)
-    in_features = base_model.fc.in_features
-    # Remplacer la dernière couche pour obtenir 27 sorties (9 cases x 3 classes)
-    base_model.fc = nn.Linear(in_features, 9 * 3)
-    model = TicTacToeResNet(base_model)
+    model = EfficientNet.from_pretrained('efficientnet-b0')
+    num_features = model._fc.in_features
+    # Adapter la couche finale pour la classification en 9 cases x 3 classes
+    model._fc = nn.Linear(num_features, 9 * 3)
     return model
 
 #############################################
@@ -41,9 +44,9 @@ class BoardDetector:
         Le modèle doit renvoyer une bounding box pour le plateau.
         """
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        # Chargement du modèle via torch.hub (assurez-vous d'avoir installé yolov5)
+        # Chargement du modèle via torch.hub
         self.model = torch.hub.load('ultralytics/yolov5', 'custom', path=model_path, force_reload=True)
-        self.model.conf = confidence_threshold  # Seuil de confiance élevé pour réduire les faux positifs
+        self.model.conf = confidence_threshold  # Seuil de confiance
         self.model.to(self.device)
         self.model.eval()
         
@@ -61,38 +64,42 @@ class BoardDetector:
         results = self.model(image)
         detections = results.xyxy[0].cpu().numpy()
         
+        # Si aucune détection, utiliser la dernière détection stable si disponible
         if len(detections) == 0:
+            if self.last_detection is not None:
+                self.board_detection_counter += 1
+                return self.last_detection
             self.board_detection_counter = 0
-            self.last_detection = None
             return None
         
+        # Prendre la meilleure détection
         best_detection = detections[0]
         x1, y1, x2, y2 = best_detection[:4]
         x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
         current_detection = [(x1, y1), (x2, y1), (x2, y2), (x1, y2)]
         
-        # Vérifier si c'est une détection similaire à la précédente
+        # Comparer avec la dernière détection pour vérifier la stabilité
         if self.last_detection is not None:
-            # Calcul de la différence moyenne des coordonnées
             diffs = []
             for i in range(4):
                 for j in range(2):
                     diffs.append(abs(current_detection[i][j] - self.last_detection[i][j]))
             avg_diff = sum(diffs) / len(diffs)
-            
-            if avg_diff < 20:  # Si les détections sont proches
+            # Tolérance augmentée à 40 pixels pour accepter de légères variations
+            if avg_diff < 40:
                 self.board_detection_counter += 1
             else:
-                self.board_detection_counter = 1  # Nouvelle détection stable
+                self.board_detection_counter = 1  # Nouvelle détection considérée comme stable
         else:
             self.board_detection_counter = 1
         
         self.last_detection = current_detection
         
-        # Ne renvoyer la détection que si elle est stable sur plusieurs frames
+        # Ne renvoyer la détection que si stable sur plusieurs frames
         if self.board_detection_counter >= self.required_consecutive_detections:
             return current_detection
         return None
+
 
 #############################################
 # Chargement du modèle CNN pour l'état du plateau
@@ -197,23 +204,27 @@ def detect_board_state(processed_image):
     """
     if processed_image is None:
         return None
-        
+
     with torch.no_grad():
-        output = cnn_model(processed_image)  # forme attendue : (1, 9, 3)
-        # Extraire les probabilités pour chaque classe
+        output = cnn_model(processed_image)  # On s'attend à (1, 9, 3)
+        # Si la sortie est en 2D (ex: (1, 27)), on la reformate en (1, 9, 3)
+        if output.dim() == 2:
+            output = output.view(1, 9, 3)
+
+        # Calcul des probabilités pour chaque classe
         probabilities = torch.nn.functional.softmax(output, dim=2)
-        # Définir un seuil de confiance pour chaque classe
+        # Récupération de la confiance et des prédictions
         confidence = torch.max(probabilities, dim=2)[0]
-        # Obtenir les prédictions
         predictions = torch.argmax(output, dim=2).cpu().numpy().flatten()
         confidence = confidence.cpu().numpy().flatten()
-        
-        # Appliquer un seuil de confiance (0.7) pour les prédictions
+
+        # Seuil de confiance : si la confiance est faible, considérer la case comme vide
         for i in range(9):
             if confidence[i] < 0.7:
-                predictions[i] = 0  # En cas de doute, considérer la case comme vide
-                
+                predictions[i] = 0
+
     return predictions
+
 
 #############################################
 # Fonctions de logique du jeu
