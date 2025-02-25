@@ -1,0 +1,14 @@
+path: ../data/board
+train: train/images  
+val: val/images
+
+nc: 1  # Nombre de classes (seulement le plateau)
+names: ['tic_tac_toe_board']
+
+# Paramètres d'augmentation spécifiques
+hyp:
+  lr0: 0.0032
+  mosaic: 0.92
+  mixup: 0.15
+  degrees: 15.8
+  perspective: 0.00123
