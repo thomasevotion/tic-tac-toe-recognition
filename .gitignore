@@ -4,3 +4,6 @@
 env
 /robot/xArm-Python-SDK
 /yolov5
+/data/board
+*.pyc
+*.npz
