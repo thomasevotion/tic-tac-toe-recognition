@@ -7,3 +7,4 @@ env
 /data/board
 *.pyc
 *.npz
+*.txt
