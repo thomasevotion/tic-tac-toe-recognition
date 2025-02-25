@@ -11,6 +11,7 @@ from torchvision import transforms, models
 from PIL import Image
 from torch.cuda.amp import GradScaler, autocast
 from torch.optim.lr_scheduler import CosineAnnealingLR
+from efficientnet_pytorch import EfficientNet
 
 #############################################
 # 1. Dataset personnalisé pour Tic Tac Toe  #
@@ -67,12 +68,10 @@ class TicTacToeResNet(nn.Module):
         return x
 
 def create_model():
-    # Charge un ResNet18 pré-entraîné
-    base_model = models.resnet18(pretrained=True)
-    in_features = base_model.fc.in_features
-    # Remplacez la couche fully connected pour obtenir 27 sorties
-    base_model.fc = nn.Linear(in_features, 9 * 3)
-    model = TicTacToeResNet(base_model)
+    model = EfficientNet.from_pretrained('efficientnet-b0')
+    num_features = model._fc.in_features
+    # Adapter la couche finale pour la classification en 9 cases x 3 classes
+    model._fc = nn.Linear(num_features, 9 * 3)
     return model
 
 #############################################
