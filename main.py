@@ -5,7 +5,6 @@ import torch
 import numpy as np
 from torchvision import transforms
 import torch.nn as nn
-from torchvision import models
 from efficientnet_pytorch import EfficientNet
 # from xarm.wrapper import XArmAPI
 # from robot.o_move import RobotMain  # Importation de la classe RobotMain depuis votre fichier original
@@ -45,7 +44,7 @@ class BoardDetector:
         """
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         # Chargement du modèle via torch.hub
-        self.model = torch.hub.load('ultralytics/yolov5', 'custom', path=model_path, force_reload=True)
+        self.model = torch.hub.load('ultralytics/yolov5', 'custom', path=model_path, force_reload=False)
         self.model.conf = confidence_threshold  # Seuil de confiance
         self.model.to(self.device)
         self.model.eval()
@@ -301,6 +300,7 @@ def wait_for_empty_board(board_detector, consecutive_empty_required=5):
     Exige plusieurs détections consécutives pour confirmer que le plateau est bien vide.
     """
     print("Attente d'un plateau vide...")
+    hadle_camera_print()
     consecutive_empty = 0
     
     while consecutive_empty < consecutive_empty_required:
@@ -497,7 +497,7 @@ def game_loop():
                     break
 
         print("Fin de partie. Attendez quelques secondes...")
-        time.sleep(3)
+        time.sleep(5)
         
         # Fermer les fenêtres OpenCV
         cv2.destroyAllWindows()
@@ -505,11 +505,14 @@ def game_loop():
         # Attendre qu'un plateau vide soit détecté pour redémarrer
         wait_for_empty_board(board_detector, consecutive_empty_required=3)
 
+def hadle_camera_print():
+    cv2.destroyAllWindows()
+    cv2.namedWindow("Caméra", cv2.WINDOW_NORMAL)
+    cv2.namedWindow("Plateau détecté", cv2.WINDOW_NORMAL)
+
 def main():
     try:
         # Création des fenêtres persistantes dès le début
-        cv2.namedWindow("Caméra", cv2.WINDOW_NORMAL)
-        cv2.namedWindow("Plateau détecté", cv2.WINDOW_NORMAL)
         game_loop()
     except KeyboardInterrupt:
         print("\nInterruption par l'utilisateur. Fin du programme.")
