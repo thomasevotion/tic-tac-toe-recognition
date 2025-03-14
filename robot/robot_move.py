@@ -116,12 +116,20 @@ class RobotMain(object):
     # Robot Main Run
     def run(self):
         try:
-            code = self._arm.set_position(x=20, radius=-1, speed=self._tcp_speed, mvacc=self._tcp_acc, relative=True, wait=True)
+            code = self._arm.set_position(z=455.5, radius=-1, speed=self._tcp_speed, mvacc=self._tcp_acc, relative=True, wait=True)
             if not self._check_code(code, 'set_position'):
                 return
-            code = self._arm.set_position(x=-20, radius=-1, speed=self._tcp_speed, mvacc=self._tcp_acc, relative=True, wait=True)
+            code = self._arm.set_position(y=400, radius=-1, speed=self._tcp_speed, mvacc=self._tcp_acc, relative=True, wait=True)
             if not self._check_code(code, 'set_position'):
                 return
+            code = self._arm.set_position(x=-150, radius=-1, speed=self._tcp_speed, mvacc=self._tcp_acc, relative=True, wait=True)
+            if not self._check_code(code, 'set_position'):
+                return
+            code = self._arm.set_servo_angle(angle=[93.0, -2.3, -89.5, 86.1, -72.0], speed=self._angle_speed, mvacc=self._angle_acc, wait=True, radius=-1.0)
+            if not self._check_code(code, 'set_servo_angle'):
+                return
+            time.sleep(4)
+            self._arm.move_gohome()
         except Exception as e:
             self.pprint('MainException: {}'.format(e))
         self.alive = False
