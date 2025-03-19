@@ -12,6 +12,7 @@ from src.models.cnn_model import create_model
 from src.utils.image_processing import capture_board_image, recenter_board_image, process_cropped_image
 from src.detection.board_detector import detect_board_state
 from src.utils.game_logic import check_winner, ai_move, display_board_state
+from src.game.game_loop import wait_for_empty_board
 
 app = Flask(__name__)
 CORS(app)
@@ -24,7 +25,6 @@ winner = 0
 player_name = ""
 player_email = ""
 game_started = False
-current_game_id = None
 
 # Configuration de la base de données
 DATABASE = 'tic_tac_toe.db'
@@ -72,6 +72,10 @@ def get_game_state():
             detected_board = detect_board_state(processed, cnn_model)
             
             if detected_board is not None:
+                # Afficher l'état du plateau dans le terminal
+                print("État du plateau détecté:")
+                display_board_state(detected_board)
+                
                 # Mise à jour de l'état du jeu
                 current_board = detected_board
                 
@@ -79,6 +83,12 @@ def get_game_state():
                 winner = check_winner(current_board)
                 if winner != 0:
                     game_over = True
+                    if winner == 1:
+                        print(f"{player_name} a gagné!")
+                    elif winner == 2:
+                        print("L'IA a gagné!")
+                    else:
+                        print("Match nul!")
         
         # Conversion pour JSON
         board_list = current_board.tolist()
@@ -91,6 +101,7 @@ def get_game_state():
             'gameStarted': game_started
         })
     except Exception as e:
+        print(f"Erreur: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/game/ai-move', methods=['POST'])
@@ -98,14 +109,25 @@ def make_ai_move():
     global current_board, player_turn, game_over, winner
     
     if not player_turn and not game_over and game_started:
+        print("Tour de l'IA...")
         # L'IA joue son coup (comme dans game_loop.py)
         current_board = ai_move(current_board)
         player_turn = True
+        
+        # Afficher l'état du plateau après le coup de l'IA
+        print("L'IA a joué:")
+        display_board_state(current_board)
         
         # Vérification des conditions de fin de jeu
         winner = check_winner(current_board)
         if winner != 0:
             game_over = True
+            if winner == 1:
+                print(f"{player_name} a gagné!")
+            elif winner == 2:
+                print("L'IA a gagné!")
+            else:
+                print("Match nul!")
     
     return jsonify({
         'board': current_board.tolist(),
@@ -116,7 +138,13 @@ def make_ai_move():
 
 @app.route('/api/game/reset', methods=['POST'])
 def reset_game():
-    global current_board, player_turn, game_over, winner, game_started, current_game_id
+    global current_board, player_turn, game_over, winner, game_started
+    
+    print("Nouvelle partie...")
+    
+    # Attendre un plateau vide
+    print("Veuillez présenter un plateau vide...")
+    wait_for_empty_board(board_detector, cnn_model)
     
     # Réinitialisation de l'état du jeu
     current_board = np.zeros(9, dtype=int)
@@ -128,14 +156,19 @@ def reset_game():
     player_turn = data.get('playerStarts', True)
     game_started = True
     
+    if player_turn:
+        print(f"C'est au tour de {player_name if player_name else 'Joueur'}")
+    else:
+        print("L'IA commence")
+    
     # Créer une nouvelle partie dans la base de données
     if player_name:
         conn = get_db_connection()
         cursor = conn.execute('INSERT INTO games (player_name, player_email) VALUES (?, ?)', 
                             (player_name, player_email))
-        current_game_id = cursor.lastrowid
         conn.commit()
         conn.close()
+        print(f"Partie enregistrée pour {player_name}")
     
     return jsonify({
         'board': current_board.tolist(),
@@ -153,6 +186,8 @@ def set_player_info():
     player_name = data.get('name', '')
     player_email = data.get('email', '')
     
+    print(f"Joueur: {player_name}, Email: {player_email}")
+    
     return jsonify({
         'success': True,
         'name': player_name,
@@ -160,4 +195,5 @@ def set_player_info():
     })
 
 if __name__ == '__main__':
+    print("Démarrage du serveur de jeu de morpion...")
     app.run(debug=True, host='0.0.0.0', port=5000)
