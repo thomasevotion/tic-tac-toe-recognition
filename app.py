@@ -3,6 +3,7 @@ import cv2
 import torch
 import numpy as np
 import time
+import sqlite3
 from flask_cors import CORS
 
 # Import des fonctions existantes
@@ -23,6 +24,31 @@ winner = 0
 player_name = ""
 player_email = ""
 game_started = False
+current_game_id = None
+
+# Configuration de la base de données
+DATABASE = 'tic_tac_toe.db'
+
+def get_db_connection():
+    conn = sqlite3.connect(DATABASE)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def init_db():
+    conn = get_db_connection()
+    conn.execute('''
+    CREATE TABLE IF NOT EXISTS games (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        player_name TEXT,
+        player_email TEXT,
+        created TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+    ''')
+    conn.commit()
+    conn.close()
+
+# Initialiser la base de données au démarrage
+init_db()
 
 # Initialisation des modèles
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -69,9 +95,9 @@ def get_game_state():
 
 @app.route('/api/game/ai-move', methods=['POST'])
 def make_ai_move():
-    global current_board, player_turn
+    global current_board, player_turn, game_over, winner
     
-    if not player_turn and not game_over:
+    if not player_turn and not game_over and game_started:
         # L'IA joue son coup (comme dans game_loop.py)
         current_board = ai_move(current_board)
         player_turn = True
@@ -90,17 +116,26 @@ def make_ai_move():
 
 @app.route('/api/game/reset', methods=['POST'])
 def reset_game():
-    global current_board, player_turn, game_over, winner, game_started
+    global current_board, player_turn, game_over, winner, game_started, current_game_id
     
     # Réinitialisation de l'état du jeu
     current_board = np.zeros(9, dtype=int)
     game_over = False
     winner = 0
     
-    # Déterminer qui commence (peut être modifié par le paramètre)
+    # Déterminer qui commence
     data = request.json
     player_turn = data.get('playerStarts', True)
     game_started = True
+    
+    # Créer une nouvelle partie dans la base de données
+    if player_name:
+        conn = get_db_connection()
+        cursor = conn.execute('INSERT INTO games (player_name, player_email) VALUES (?, ?)', 
+                            (player_name, player_email))
+        current_game_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
     
     return jsonify({
         'board': current_board.tolist(),
