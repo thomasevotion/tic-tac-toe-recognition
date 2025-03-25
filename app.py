@@ -39,7 +39,8 @@ game_state = {
     "winner": 0,
     "game_started": False,
     "waiting_for_board": False,
-    "board_visible": False
+    "board_visible": False,
+    "ai_playing": False
 }
 
 player_info = {
@@ -93,9 +94,6 @@ def wait_for_empty_board_thread():
 def update_game_state_thread():
     global game_state
     
-    # Compteur pour suivre les détections consécutives sans plateau
-    no_board_counter = 0
-    
     # Variables pour suivre les changements de plateau
     previous_board = np.array(game_state["board"])
     consecutive_stable_detections = 0
@@ -105,43 +103,41 @@ def update_game_state_thread():
         if game_state["game_started"] and not game_state["waiting_for_board"]:
             try:
                 # Si c'est le tour de l'IA, faire jouer l'IA automatiquement
-                if not game_state["player_turn"] and not game_state["game_over"]:
+                if not game_state["player_turn"] and not game_state["game_over"] and not game_state["ai_playing"]:
                     print("Tour de l'IA...")
                     board = np.array(game_state["board"])
                     board = ai_move(board)
                     game_state["board"] = board.tolist()
-                    game_state["player_turn"] = True
+                    game_state["ai_playing"] = True
+                    game_state["expected_board"] = board.tolist()
                     print("L'IA a joué:")
                     display_board_state(board)
-                    
-                    # Vérifier s'il y a un gagnant
-                    winner = check_winner(board)
-                    if winner != 0:
-                        game_state["game_over"] = True
-                        game_state["winner"] = winner
-                        print(f"Fin de partie: {'Joueur' if winner == 1 else 'IA' if winner == 2 else 'Match nul'}")
-                    
-                    # Mettre à jour le plateau précédent
-                    previous_board = np.array(game_state["board"])
                 
                 image = capture_board_image()
                 recentered, detected = recenter_board_image(image, board_detector)
                 
                 if detected:
-                    # Réinitialiser le compteur car un plateau est détecté
-                    no_board_counter = 0
                     game_state["board_visible"] = True
-                    
                     processed = process_cropped_image(recentered)
                     detected_board = detect_board_state(processed, cnn_model)
                     
                     if detected_board is not None:
-                        # Afficher l'état comme dans le jeu original
                         print("État du plateau détecté:")
                         display_board_state(detected_board)
                         
+                        # Si l'IA a joué et attend confirmation
+                        if game_state["ai_playing"]:
+                            # Vérifier si le O de l'IA est détecté sur le plateau
+                            expected_board = np.array(game_state["expected_board"])
+                            if np.array_equal(detected_board, expected_board):
+                                game_state["board"] = detected_board.tolist()
+                                game_state["player_turn"] = True
+                                game_state["ai_playing"] = False
+                                print("Coup de l'IA confirmé, c'est au tour du joueur.")
+                                previous_board = detected_board.copy()
+                        
                         # Vérifier si un nouveau coup a été joué par le joueur
-                        if game_state["player_turn"] and not game_state["game_over"]:
+                        elif game_state["player_turn"] and not game_state["game_over"]:
                             # Vérifier que le joueur a bien ajouté exactement un X
                             x_count_before = np.sum(previous_board == 1)
                             x_count_after = np.sum(detected_board == 1)
@@ -169,9 +165,6 @@ def update_game_state_thread():
                                     print("Mouvement du joueur détecté, c'est au tour de l'IA.")
                             else:
                                 consecutive_stable_detections = 0
-                        else:
-                            # Si ce n'est pas le tour du joueur, juste mettre à jour l'état
-                            game_state["board"] = detected_board.tolist()
                         
                         # Vérifier s'il y a un gagnant
                         winner = check_winner(detected_board)
@@ -180,13 +173,7 @@ def update_game_state_thread():
                             game_state["winner"] = winner
                             print(f"Fin de partie: {'Joueur' if winner == 1 else 'IA' if winner == 2 else 'Match nul'}")
                 else:
-                    # Incrémenter le compteur quand aucun plateau n'est détecté
-                    no_board_counter += 1
-                    
-                    # Si aucun plateau n'est détecté pendant plusieurs frames consécutives
-                    if no_board_counter >= 5:
-                        game_state["board_visible"] = False
-                        print("Plateau non détecté. Veuillez présenter le plateau à la caméra.")
+                    game_state["board_visible"] = False
                     
             except Exception as e:
                 print(f"Erreur lors de la mise à jour de l'état: {e}")
@@ -198,7 +185,6 @@ def update_game_state_thread():
 def get_game_state():
     return jsonify(game_state)
 
-
 @app.route('/api/game/reset', methods=['POST'])
 def reset_game():
     global game_state, player_info
@@ -206,9 +192,10 @@ def reset_game():
     # Réinitialiser l'état du jeu
     game_state["game_over"] = False
     game_state["winner"] = 0
-    game_state["player_turn"] = request.json.get('playerStarts', True)
+    game_state["player_turn"] = True
     game_state["game_started"] = False
     game_state["board_visible"] = False
+    game_state["ai_playing"] = False
     
     # Enregistrer la partie dans la base de données
     if player_info["name"]:
