@@ -99,6 +99,10 @@ def update_game_state_thread():
     consecutive_stable_detections = 0
     last_detected_board = None
     
+    # Variables pour suivre la confirmation de victoire
+    consecutive_win_detections = 0
+    last_winner = 0
+    
     while True:
         if game_state["game_started"] and not game_state["waiting_for_board"]:
             try:
@@ -168,10 +172,25 @@ def update_game_state_thread():
                         
                         # Vérifier s'il y a un gagnant
                         winner = check_winner(detected_board)
+                        
+                        # Si un gagnant potentiel est détecté
                         if winner != 0:
-                            game_state["game_over"] = True
-                            game_state["winner"] = winner
-                            print(f"Fin de partie: {'Joueur' if winner == 1 else 'IA' if winner == 2 else 'Match nul'}")
+                            # Vérifier si c'est le même gagnant que la dernière fois
+                            if winner == last_winner:
+                                consecutive_win_detections += 1
+                            else:
+                                consecutive_win_detections = 1
+                                last_winner = winner
+                            
+                            # Ne déclarer la victoire qu'après plusieurs détections consécutives
+                            if consecutive_win_detections >= 2:
+                                game_state["game_over"] = True
+                                game_state["winner"] = winner
+                                print(f"Fin de partie confirmée: {'Joueur' if winner == 1 else 'IA' if winner == 2 else 'Match nul'}")
+                        else:
+                            # Réinitialiser le compteur si aucun gagnant n'est détecté
+                            consecutive_win_detections = 0
+                            last_winner = 0
                 else:
                     game_state["board_visible"] = False
                     
