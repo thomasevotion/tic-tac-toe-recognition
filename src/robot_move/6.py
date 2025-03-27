@@ -116,11 +116,17 @@ class RobotMain(object):
     # Robot Main Run
     def run(self):
         try:
-            code = self._arm.set_position(x=20, radius=-1, speed=self._tcp_speed, mvacc=self._tcp_acc, relative=True, wait=True)
-            if not self._check_code(code, 'set_position'):
+            code = self._arm.set_servo_angle(angle=[0.0, -89.8, 0.3, 88.6, 0.0], speed=self._angle_speed, mvacc=self._angle_acc, wait=True, radius=-1.0)
+            if not self._check_code(code, 'set_servo_angle'):
                 return
-            code = self._arm.set_position(x=-20, radius=-1, speed=self._tcp_speed, mvacc=self._tcp_acc, relative=True, wait=True)
-            if not self._check_code(code, 'set_position'):
+            code = self._arm.set_servo_angle(angle=[-25.5, -15.4, -75.5, 90.9, -118.3], speed=self._angle_speed, mvacc=self._angle_acc, wait=True, radius=-1.0)
+            if not self._check_code(code, 'set_servo_angle'):
+                return
+            code = self._arm.move_circle([355.8, -110.1, 548.8, 180.0, 0.0, 92.8], [356.0, -136.9, 613.8, 180.0, 0.0, 92.8], float(360) / 360 * 100, speed=self._tcp_speed, mvacc=self._tcp_acc, wait=True)
+            if not self._check_code(code, 'move_circle'):
+                return
+            code = self._arm.set_servo_angle(angle=[0.0, -89.8, 0.3, 88.6, 0.0], speed=self._angle_speed, mvacc=self._angle_acc, wait=True, radius=-1.0)
+            if not self._check_code(code, 'set_servo_angle'):
                 return
         except Exception as e:
             self.pprint('MainException: {}'.format(e))
