@@ -1,4 +1,5 @@
 import numpy as np
+import os
 
 def check_winner(board):
     """
@@ -27,43 +28,53 @@ def ai_move(board):
     Priorité: gagner > bloquer l'adversaire > centre > coins > côtés
     """
     board_copy = board.copy()
+    move_index = -1
     
     # Vérifier si l'IA peut gagner
     for i in range(9):
         if board_copy[i] == 0:
             board_copy[i] = 2
             if check_winner(board_copy) == 2:
-                return board_copy
+                move_index = i
+                break
             board_copy[i] = 0
     
     # Bloquer une victoire potentielle du joueur
-    for i in range(9):
-        if board_copy[i] == 0:
-            board_copy[i] = 1
-            if check_winner(board_copy) == 1:
-                board_copy[i] = 2
-                return board_copy
-            board_copy[i] = 0
+    if move_index == -1:
+        for i in range(9):
+            if board_copy[i] == 0:
+                board_copy[i] = 1
+                if check_winner(board_copy) == 1:
+                    board_copy[i] = 2
+                    move_index = i
+                    break
+                board_copy[i] = 0
     
     # Jouer au centre si disponible
-    if board_copy[4] == 0:
+    if move_index == -1 and board_copy[4] == 0:
         board_copy[4] = 2
-        return board_copy
+        move_index = 4
     
     # Jouer dans un coin disponible
-    corners = [0, 2, 6, 8]
-    for corner in corners:
-        if board_copy[corner] == 0:
-            board_copy[corner] = 2
-            return board_copy
+    if move_index == -1:
+        corners = [0, 2, 6, 8]
+        for corner in corners:
+            if board_copy[corner] == 0:
+                board_copy[corner] = 2
+                move_index = corner
+                break
     
     # Jouer sur un côté disponible
-    sides = [1, 3, 5, 7]
-    for side in sides:
-        if board_copy[side] == 0:
-            board_copy[side] = 2
-            return board_copy
+    if move_index == -1:
+        sides = [1, 3, 5, 7]
+        for side in sides:
+            if board_copy[side] == 0:
+                board_copy[side] = 2
+                move_index = side
+                break
     
+    print(f"L'IA a joué en position: {move_index}")
+    robot_move(move_index=move_index+1)
     return board_copy
 
 def display_board_state(board):
@@ -78,3 +89,6 @@ def display_board_state(board):
             row += symbols[board[i*3 + j]] + " | "
         print(row)
         print("-" * 13)
+
+def robot_move(move_index):
+    os.system(f"python src/robot_move/{move_index}.py")
